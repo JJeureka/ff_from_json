@@ -1,0 +1,220 @@
+---
+title: "Trying to figure out JSON"
+author: "John Jurica"
+date: "2024-09-15"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r load libaries}
+library(base)
+library(dplyr)
+library(jsonlite)
+library(forcats)
+library(ggplot2)
+library(graphics)
+library(grDevices)
+library(httr)
+library(kableExtra)
+library(methods)
+library(purrr)
+library(readr)
+library(stats)
+library(tibble)
+library(tidyr)
+library(tidyverse)
+library(yaml)
+
+
+
+```
+
+```{r get API}
+
+
+url <- "https://lm-api-reads.fantasy.espn.com/apis/v3/games/FFL/leagueHistory/533712?view=mMatchupScore&view=mStatus&view=mSettings&view=mTeam&view=modular&view=mNav&seasonId=2023"
+
+
+```
+
+
+```{r get Json}
+
+all_crew_data <- fromJSON(url)
+
+```
+
+
+```{r get Members from JSON}
+
+#pulls just the members list from the entire data set
+members_crew_data <- all_crew_data$members
+
+#this pulls the data from out of the list - this is good to go
+members_crew_data_1 <- members_crew_data[[1]]
+
+```
+
+
+
+```{r get Teams from JSON}
+
+#pulls just the teams list from the entire data set
+teams_crew_data <- all_crew_data$teams
+
+#this pulls the data frame out of the list - this still has nested data so we will need to unnest after joining
+teams_crew_data_1 <- teams_crew_data[[1]]
+
+```
+
+
+
+
+```{r joining members and teams on members.id and teams.primaryOwner}
+
+result <- inner_join(members_crew_data_1, teams_crew_data_1, by = c("id" = "primaryOwner"))
+
+```
+
+
+```{r unnest record$overall from joined dataset}
+
+result_unnested_record <- result %>%
+     unnest(cols = c(record))
+
+result_unnested_overall <- result_unnested_record %>%
+     unnest(cols = c(overall))
+
+View(result_unnested_overall)
+
+
+```
+
+
+```{r select only the columns we want}
+
+final_crew_data <- result_unnested_overall %>%
+   select(displayName, firstName, points, pointsFor, pointsAgainst, id, owners)
+
+View(final_crew_data)
+
+```
+
+
+```{r can we just put this in here?}
+summary_table <- final_crew_data %>%
+  group_by(firstName) %>%
+  summarise(
+    avg_points_against = round(mean(pointsAgainst), 2),
+    avg_points_for = round(mean(pointsFor), 2)
+  ) %>%
+  arrange(desc(avg_points_for))
+
+# Rename columns for readability
+summary_table <- summary_table %>%
+  rename(
+    `Team Name` = firstName,
+    `Points Against` = avg_points_against,
+    `Points For` = avg_points_for
+  )
+
+# Display the table with kable and kableExtra with custom width
+summary_table <- kable(summary_table, 
+      caption = "Points For and Against in 2023", 
+      align = c("l", "c", "c")) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+    full_width = TRUE, # Set to TRUE to make the table wider
+    position = "center"
+  ) %>%
+  column_spec(1, width = "15em") %>%   
+  column_spec(2, width = "15em") %>%  
+  column_spec(3, width = "15em") %>%  # 
+  row_spec(0, bold = TRUE, color = "white", background = "#4CAF50", extra_css = "padding: 20px;")
+
+summary_table
+```
+
+
+
+## Including Plots
+
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+
+```{r json blob}
+
+library(jsonlite)
+json_data <- '{
+  "league": {
+    "league_id": 12345,
+    "season": 2023,
+    "teams": [
+      {
+        "team_id": 1,
+        "team_name": "The Crushers",
+        "owner": {
+          "name": "John Doe",
+          "email": "john@example.com"
+        },
+        "players": [
+          {
+            "player_id": 101,
+            "name": "Patrick Mahomes",
+            "position": "QB",
+            "points": 250
+          },
+          {
+            "player_id": 102,
+            "name": "Derrick Henry",
+            "position": "RB",
+            "points": 200
+          }
+        ]
+      },
+      {
+        "team_id": 2,
+        "team_name": "The Destroyers",
+        "owner": {
+          "name": "Jane Smith",
+          "email": "jane@example.com"
+        },
+        "players": [
+          {
+            "player_id": 103,
+            "name": "Josh Allen",
+            "position": "QB",
+            "points": 260
+          },
+          {
+            "player_id": 104,
+            "name": "Dalvin Cook",
+            "position": "RB",
+            "points": 190
+          }
+        ]
+      }
+    ]
+  }
+}'
+
+parsed_data <- fromJSON(json_data)
+
+
+
+```
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
